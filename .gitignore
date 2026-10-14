@@ -1,0 +1,61 @@
+# Go
+server/server.exe
+server/*.exe
+server/*.exe~
+server/vendor/
+# Local dev restart helpers (hardcoded dev password / runtime marker)
+server/restart_server.bat
+server/start_once.bat
+server/restart_status.marker
+server/server_run.log
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+.claude/
+.kilo/
+.docs/
+*.swp
+
+# OS
+Thumbs.db
+
+# Tools: entire directory is local-only, not tracked
+tools/local/
+# docs/: local-only by default, except the public device access guide
+docs/*
+
+# Docker stack: secrets, local env and generated certs not tracked
+deploy/docker/.env
+deploy/docker/certs/
+
+# Config with secrets
+*.local.yaml
+config.yaml
+config.local.yaml
+
+# Firmware / OTA binary artifacts (source only in repo; distributed via Releases)
+*.soc
+*.binpkg
+*.bin
+*.zip
+# 例外：core/ 下合宙官方固件（烧录 demo 必需）
+!hardware/780epm_common/core/**/*.soc
+
+# Device runtime logs (may contain real IMEI)
+log.txt
+*.log
+
+# Local scratch/helper scripts (underscore-prefixed, generated locally)
+/_*.bat
+/_*.ps1
+/_*.txt
+/server/_*.bat
+/server/_*.txt

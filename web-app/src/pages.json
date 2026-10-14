@@ -1,0 +1,61 @@
+{
+  "pages": [
+    {
+      "path": "pages/projects/index",
+      "style": {
+        "navigationBarTitleText": "项目列表"
+      }
+    },
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "设备监控"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/devices/index",
+      "style": {
+        "navigationBarTitleText": "设备列表"
+      }
+    },
+    {
+      "path": "pages/data/index",
+      "style": {
+        "navigationBarTitleText": "数据历史"
+      }
+    },
+    {
+      "path": "pages/settings/index",
+      "style": {
+        "navigationBarTitleText": "设置"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "问稻物联",
+    "navigationBarBackgroundColor": "#F8F8F8",
+    "backgroundColor": "#F8F8F8"
+  },
+  "tabBar": {
+    "color": "#999",
+    "selectedColor": "#1890ff",
+    "backgroundColor": "#fff",
+    "list": [
+      {
+        "pagePath": "pages/projects/index",
+        "text": "项目"
+      },
+      {
+        "pagePath": "pages/settings/index",
+        "text": "设置"
+      }
+    ]
+  }
+}

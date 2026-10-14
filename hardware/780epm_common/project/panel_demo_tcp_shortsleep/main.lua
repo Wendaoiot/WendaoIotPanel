@@ -1,0 +1,120 @@
+--[[
+@module  main
+@summary LuatOS用户应用脚本文件入口，总体调度应用逻辑
+@version 1.0
+
+@usage
+本demo演示的核心功能为：
+1、创建四路mqtt连接，详情如下
+- 创建一个mqtt client，连接mqtt server；
+- 创建一个mqtt ssl client，连接mqtt ssl server，不做证书校验；
+- 创建一个mqtt ssl client，连接mqtt ssl server，client仅单向校验server的证书，server不校验client的证书和密钥文件；
+- 创建一个mqtt ssl client，连接mqtt ssl server，client校验server的证书，server校验client的证书和密钥文件；
+2、每一路mqtt连接出现异常后，自动重连；
+3、每一路mqtt连接，client按照以下几种逻辑发送数据给server
+- 串口应用功能模块uart_app.lua，通过uart1接收到串口数据，将串口数据增加send from uart: 前缀后，使用mobile.imei().."/uart/up"主题，发送给server；
+- 定时器应用功能模块timer_app.lua，定时产生数据，将数据增加send from timer：前缀后，使用mobile.imei().."/timer/up"主题，发送给server；
+4、每一路mqtt连接，client收到server数据后，将数据增加recv from mqtt/mqtt ssl/mqtt ssl ca/mqtt ssl mutual ca（四选一）server: 前缀后，通过uart1发送出去；
+5、启动一个网络业务逻辑看门狗task，用来监控网络环境，如果连续长时间工作不正常，重启整个软件系统；
+6、netdrv_device：配置连接外网使用的网卡，目前支持以下三种选择（三选一）
+   (1) netdrv_4g：4G网卡
+   (2) netdrv_eth_spi：通过SPI外挂CH390H芯片的以太网卡
+   (3) netdrv_multiple：支持以上两种网卡，可以配置两种网卡的优先级
+
+更多说明参考本目录下的readme.md文件
+]]
+
+
+--[[
+必须定义PROJECT和VERSION变量，Luatools工具会用到这两个变量，远程升级功能也会用到这两个变量
+PROJECT：项目名，ascii string类型
+        可以随便定义，只要不使用,就行
+VERSION：项目版本号，ascii string类型
+        如果使用合宙iot.openluat.com进行远程升级，必须按照"XXX.YYY.ZZZ"三段格式定义：
+            X、Y、Z各表示1位数字，三个X表示的数字可以相同，也可以不同，同理三个Y和三个Z表示的数字也是可以相同，可以不同
+            因为历史原因，YYY这三位数字必须存在，但是没有任何用处，可以一直写为999
+        如果不使用合宙iot.openluat.com进行远程升级，根据自己项目的需求，自定义格式即可
+]]
+PROJECT = "MQTT"
+VERSION = "001.999.002"
+
+
+-- 在日志中打印项目名和项目版本号
+log.info("main", PROJECT, VERSION)
+
+-- 初始化两路升压电路使能引脚
+-- EN1: GPIO37 拉高使能打开RS485_5V
+-- EN2: GPIO38 拉高使能
+gpio.setup(37, 1)
+gpio.setup(38, 1)
+
+-- 如果内核固件支持errDump功能，此处进行配置，【强烈建议打开此处的注释】
+-- 因为此功能模块可以记录并且上传脚本在运行过程中出现的语法错误或者其他自定义的错误信息，可以初步分析一些设备运行异常的问题
+-- 以下代码是最基本的用法，更复杂的用法可以详细阅读API说明文档
+-- 启动errDump日志存储并且上传功能，600秒上传一次
+-- if errDump then
+--     errDump.config(true, 600)
+-- end
+
+
+-- 使用LuatOS开发的任何一个项目，都强烈建议使用远程升级FOTA功能
+-- 可以使用合宙的iot.openluat.com平台进行远程升级
+-- 也可以使用客户自己搭建的平台进行远程升级
+-- 远程升级的详细用法，可以参考fota的demo进行使用
+
+
+-- 启动一个循环定时器
+-- 每隔3秒钟打印一次总内存，实时的已使用内存，历史最高的已使用内存情况
+-- 方便分析内存使用是否有异常
+-- sys.timerLoopStart(function()
+--     log.info("mem.lua", rtos.meminfo())
+--     log.info("mem.sys", rtos.meminfo("sys"))
+-- end, 3000)
+
+-- 加载网络环境检测看门狗功能模块
+require "network_watchdog"
+
+-- 加载硬件看门狗喂狗功能模块(GPIO27电平反转喂狗)
+require "hw_watchdog"
+
+-- 加载网络驱动设备功能模块
+require "netdrv_device"
+
+-- 加载串口应用功能模块
+require "uart_app"
+-- 加载串口3应用功能模块(与UART1功能相同，MQTT透传)
+require "uart3_app"
+-- 加载RS485串口测试功能模块(UART2 + GPIO33 DIR)
+require "rs485_test"
+-- 加载四路ADC采样测试功能模块(分压150k上+53k下)
+require "adc_test"
+-- 加载四路DI/DO测试功能模块
+require "dio_test"
+-- 加载定时器应用功能模块
+require "timer_app"
+
+-- 加载mqtt client 主应用功能模块
+require "mqtt_main"
+
+-- 加载mqtt数据上报模块
+require "mqtt_report"
+
+-- 加载低功耗休眠测试功能模块(联网休眠WORK_MODE 1+仅MQTT远程唤醒)
+-- require "sleep_test"
+
+-- 加载PSM+模式MQTT短连接低功耗测试功能模块(断网压榨功耗,dtimer唤醒重启循环)
+require "psm_test"
+
+-- 加载mqtt ssl client 主应用功能模块（mqtt ssl 无证书校验）
+-- require "mqtts_main"
+
+-- 加载mqtt ssl ca client 主应用功能模块（mqtt ssl 单向证书校验）
+-- require "mqtts_ca_main"
+
+-- 加载mqtt ssl mutual ca client 主应用功能模块（mqtt ssl 双向证书校验）
+-- require "mqtts_m_ca_main"
+
+-- 用户代码已结束---------------------------------------------
+-- 结尾总是这一句
+sys.run()
+-- sys.run()之后不要加任何语句!!!!!因为添加的任何语句都不会被执行

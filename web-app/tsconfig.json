@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": ["ESNext", "DOM"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": ["@dcloudio/types"]
+  },
+  "include": [
+    "src/env.d.ts",
+    "src/pages/**/*.vue",
+    "src/api/**/*.ts",
+    "src/utils/**/*.ts",
+    "src/App.vue",
+    "src/main.ts"
+  ]
+}

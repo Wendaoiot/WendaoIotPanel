@@ -1,0 +1,134 @@
+/* ===== 设计 token（全站统一） =====
+   主色沿用 Element 蓝 #409eff；语义色/圆角/阴影/动效以 CSS 变量下发，
+   组件内通过 var(--wd-*) 消费。替代散落的硬编码色值（如 #1890ff）。 */
+:root {
+  /* 品牌与语义色 */
+  --wd-primary: #409eff;
+  --wd-primary-light: #79bbff;
+  --wd-success: #67c23a;
+  --wd-success-bg: rgba(103, 194, 58, 0.12);
+  --wd-warning: #e6a23c;
+  --wd-warning-bg: rgba(230, 162, 60, 0.12);
+  --wd-danger: #f56c6c;
+  --wd-danger-border: #fde2e2;
+  --wd-danger-bg: #fef0f0;
+  --wd-info: #909399;
+
+  /* 文本层级 */
+  --wd-text-primary: #303133;
+  --wd-text-regular: #606266;
+  --wd-text-secondary: #909399;
+  --wd-text-placeholder: #c0c4cc;
+
+  /* 表面与边框 */
+  --wd-surface: #ffffff;
+  --wd-bg: #f5f7fa;
+  --wd-border: #e4e7ed;
+  --wd-border-lighter: #ebeef5;
+
+  /* 侧边栏深色体系 */
+  --wd-sidebar-bg: #304156;
+  --wd-sidebar-text: #bfcbd9;
+  --wd-sidebar-active: var(--wd-primary-light);
+  --wd-sidebar-border: rgba(255, 255, 255, 0.08);
+
+  /* 圆角：卡片大圆角，控件中圆角 */
+  --wd-radius-lg: 12px;
+  --wd-radius-md: 8px;
+
+  /* 阴影两级：静置 / 悬停抬升 */
+  --wd-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --wd-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+
+  /* 动效 */
+  --wd-dur: 150ms;
+  --wd-ease: ease-out;
+
+  /* ===== Element Plus 主题映射（全站统一，无需 SCSS 重编） ===== */
+  --el-color-primary: var(--wd-primary);
+  --el-color-primary-light-3: var(--wd-primary-light);
+  --el-color-primary-light-5: #a0cfff;
+  --el-color-primary-light-7: #c6e2ff;
+  --el-color-primary-light-8: #d9ecff;
+  --el-color-primary-light-9: #ecf5ff;
+  --el-color-success: var(--wd-success);
+  --el-color-warning: var(--wd-warning);
+  --el-color-danger: var(--wd-danger);
+  --el-color-info: var(--wd-info);
+  --el-text-color-primary: var(--wd-text-primary);
+  --el-text-color-regular: var(--wd-text-regular);
+  --el-text-color-secondary: var(--wd-text-secondary);
+  --el-text-color-placeholder: var(--wd-text-placeholder);
+  --el-border-color: var(--wd-border);
+  --el-border-color-light: var(--wd-border-lighter);
+  --el-border-radius-base: var(--wd-radius-md);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+.page-container {
+  padding: 20px;
+  height: 100%;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.table-card {
+  margin-top: 0;
+}
+
+/* 设备详情页签内容：去掉旧“整页壳”后的统一容器（自然整页滚动，无内层滚动盒） */
+.tab-pane {
+  padding-top: 16px;
+}
+
+.tab-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.empty-tip {
+  text-align: center;
+  padding: 40px;
+  color: var(--wd-text-secondary);
+}
+
+.form-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}

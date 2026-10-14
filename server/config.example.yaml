@@ -1,0 +1,88 @@
+# 问道物联面板 · 服务端配置示例
+#
+# 本仓库包含两个独立部署的服务进程，共用同一套配置结构：
+#   wendao-server（cmd/server）：HTTP API / WebSocket / 业务 MQTT 客户端 / 定时任务
+#   wendao-broker（cmd/broker）：独立 MQTT broker，设备接入 1883/8883，认证/ACL/互踢
+# 两者与 MySQL 一样作为独立服务部署（容器见 deploy/docker/docker-compose.yml）。
+#
+# 用法：复制为 config.yaml 后按需修改；
+#   更推荐通过环境变量注入敏感项（优先级高于本文件，前缀 WQ_）。
+#
+# 支持的环境变量（覆盖同名配置项）：
+#   WQ_CONFIG_PATH        配置文件路径（默认 config.yaml）
+#   WQ_SERVER_PORT        后端 HTTP 监听端口（仅 server）
+#   WQ_JWT_SECRET         JWT 签名密钥（server 必填，≥16 位强随机；禁止默认值）
+#   WQ_MYSQL_HOST / WQ_MYSQL_PORT / WQ_MYSQL_USER / WQ_MYSQL_PASSWORD / WQ_MYSQL_DATABASE
+#   WQ_MQTT_BROKER        后端业务客户端连接的 broker（server，如 tcp://broker:1883）
+#   WQ_MQTT_CLIENT_ID     后端业务客户端 client id
+#   WQ_BROKER_LISTEN_PORT / WQ_BROKER_TLS_PORT / WQ_BROKER_TLS_CERT / WQ_BROKER_TLS_KEY
+#   WQ_BROKER_PERSISTENCE_PATH / WQ_BROKER_INTERNAL_ADDR
+#   WQ_BROKER_SERVER_USERNAME / WQ_BROKER_SERVER_PASSWORD  平台 MQTT 账号（两进程共用）
+#   WQ_SYNC_SECRET        broker↔后端内部 HTTP 共享密钥（两进程必须一致，≥16 位）
+#   WQ_SYNC_SERVER_URL    broker 上报后端地址（broker，如 http://wendao:8080）
+#   WQ_SYNC_BROKER_URL    后端调 broker 地址（server，如 http://broker:18090）
+#   WQ_CORS_ORIGINS       允许的前端来源（逗号分隔）
+#   WQ_DEVICE_ONLINE_MODE  设备在线判定模式（connection / report / ping）
+#   WQ_DEVICE_OFFLINE_TIMEOUT_SEC / WQ_DEVICE_SCAN_INTERVAL_SEC
+#   WQ_DEVICE_PING_INTERVAL_SEC  ping 模式探活发送周期
+#   WQ_INSECURE=1         仅本地开发：跳过密钥强度校验（生产严禁使用）
+#
+# 生成强随机密钥：  openssl rand -base64 48
+
+server:
+  port: 8080
+  # jwt_secret 请勿提交真实值到仓库；生产用 WQ_JWT_SECRET 环境变量注入。
+  jwt_secret: "CHANGE_ME_to_a_long_random_secret_at_least_32_chars"
+  # CORS 白名单（生产必填；留空则仅放行本机开发端口）
+  cors_origins:
+    - http://localhost:3000
+    - http://localhost:3001
+
+mysql:
+  # 容器内网部署时 host 用 compose 服务名（如 mysql）
+  host: 127.0.0.1
+  port: 3306
+  user: wendaoiot
+  password: "CHANGE_ME"
+  database: wendaoiot
+
+mqtt:
+  # server 业务客户端连接的独立 broker 地址
+  broker: tcp://127.0.0.1:1883
+  client_id: wendao_server
+
+# 独立 MQTT broker 配置（cmd/broker 消费）
+broker:
+  listen_port: 1883          # MQTT 明文端口；0 关闭
+  tls_port: 8883             # MQTT over TLS；无证书时置 0
+  tls_cert: ""               # 如 /etc/wendao/certs/server.crt
+  tls_key: ""                # 如 /etc/wendao/certs/server.key
+  persistence_path: ""       # pebble 持久化目录（容器内 /data/broker）；空禁用
+  internal_addr: ":18090"    # 内部 HTTP（健康探针/踢线），仅内网监听，不映射宿主
+  # 平台自身 MQTT 账号：server 业务客户端以此身份连入，认证按“平台账号”分支全放行
+  server_username: wendao_server
+  server_password: "CHANGE_ME_to_a_strong_random_password_at_least_16"
+
+# broker ↔ 后端内部 HTTP 通道（仅 compose 内网，X-Sync-Key 鉴权，不对外暴露）
+sync:
+  secret: "CHANGE_ME_to_a_strong_random_shared_secret_at_least_16"
+  server_url: http://127.0.0.1:8080  # broker → 后端（设备状态上报）
+  broker_url: http://127.0.0.1:18090 # 后端 → broker（互踢）
+
+# 设备在线判定（仅 server）
+# online_mode:
+#   connection — 仅按 MQTT 连接判定（默认）：连接 broker 即在线、断开即离线；
+#                设备靠 MQTT keepalive 保活，不上报数据也保持在线。
+#                offline_timeout_sec 仅作 broker 宕机期间的兜底回收阈值。
+#   report     — 按上报判定：在 offline_timeout_sec 内有数据上报即在线
+#                （连接事件仍即时置在线/即时置离线，超时是对连接假死的补充）；
+#                offline_timeout_sec: 0 表示跟随全局默认超时。
+#   ping       — 按应答信号判定：平台每 ping_interval_sec 向 wendao/{id}/ping
+#                发探活，设备须订阅并向 wendao/{id}/ping/ack 回应；
+#                超过 offline_timeout_sec 未应答判离线。适用于常供电常连接设备，
+#                休眠设备不适用（需固件支持 ping 应答）。
+device:
+  online_mode: connection
+  offline_timeout_sec: 60
+  scan_interval_sec: 60
+  ping_interval_sec: 60

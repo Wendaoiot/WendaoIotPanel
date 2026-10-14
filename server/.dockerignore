@@ -1,0 +1,7 @@
+# 排除与 Go 构建无关的文件，加速上下文传输与层缓存
+# （构建必需：cmd/ internal/ pkg/ go.mod go.sum —— 勿列入）
+*.md
+*.bat
+*.marker
+config.yaml
+config.example.yaml

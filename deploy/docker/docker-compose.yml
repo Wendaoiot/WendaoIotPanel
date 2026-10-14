@@ -1,0 +1,160 @@
+# WendaoIotPanel 生产容器栈
+#
+# 拓扑（详见 docs/容器化部署运维手册.md）：
+#   broker : 独立 MQTT broker（mochi-mqtt，MIT），设备接入 1883/8883；
+#            认证/ACL/互踢在本进程，设备只读 MySQL，内部 HTTP 与后端通信
+#   wendao : Go 后端 :8080（不对宿主暴露，仅网内），业务 MQTT 客户端连 broker
+#   mysql  : MySQL 8.0（仅网内，命名卷持久化）
+#   nginx  : web-admin + wiki 静态站 + 反代 wendao:8080（对外 80）
+#
+# 用法：
+#   1) cp .env.example .env   # 或用 gen-secrets.sh 生成强密钥
+#   2) ./gen-certs.sh         # 生成 8883 证书（产物 certs/）
+#   3) docker compose build
+#   4) docker compose up -d
+#
+# 清库重来： docker compose down -v（会删除数据库与 broker 会话数据）
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: wq-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-wendaoiot}"
+      MYSQL_USER: "wendao"                 # 应用专用账号（非 root）
+      MYSQL_PASSWORD: "${MYSQL_APP_PASSWORD}"
+      TZ: "Asia/Shanghai"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - wq-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - wendao-net
+
+  broker:
+    build:
+      context: ../../server
+      dockerfile: Dockerfile
+    image: wendao/app:latest
+    container_name: wq-broker
+    restart: unless-stopped
+    entrypoint: ["wendao-broker"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TZ: "Asia/Shanghai"
+      # ---- MySQL（认证只读；表结构由后端 AutoMigrate）----
+      WQ_MYSQL_HOST: "mysql"
+      WQ_MYSQL_PORT: "3306"
+      WQ_MYSQL_USER: "wendao"
+      WQ_MYSQL_PASSWORD: "${MYSQL_APP_PASSWORD}"
+      WQ_MYSQL_DATABASE: "${MYSQL_DATABASE:-wendaoiot}"
+      # ---- MQTT 监听 ----
+      WQ_BROKER_LISTEN_PORT: "${MQTT_PORT:-1883}"
+      WQ_BROKER_TLS_PORT: "${MQTT_TLS_PORT:-8883}"
+      WQ_BROKER_TLS_CERT: "/etc/wendao/certs/server.crt"
+      WQ_BROKER_TLS_KEY: "/etc/wendao/certs/server.key"
+      WQ_BROKER_PERSISTENCE_PATH: "/data/broker"
+      WQ_BROKER_INTERNAL_ADDR: ":18090"
+      # ---- 平台 MQTT 账号（后端业务客户端以此身份连入）----
+      WQ_BROKER_SERVER_USERNAME: "${WQ_BROKER_SERVER_USERNAME:-wendao_server}"
+      WQ_BROKER_SERVER_PASSWORD: "${WQ_BROKER_SERVER_PASSWORD}"
+      # ---- 上报后端 ----
+      WQ_SYNC_SECRET: "${WQ_SYNC_SECRET}"
+      WQ_SYNC_SERVER_URL: "http://wendao:8080"
+    ports:
+      - "${MQTT_PORT:-1883}:1883"      # MQTT 明文（设备接入；可按需关闭宿主映射）
+      - "${MQTT_TLS_PORT:-8883}:8883"  # MQTT over TLS
+    volumes:
+      - ./certs:/etc/wendao/certs:ro
+      - wq-broker-data:/data/broker
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18090/internal/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - wendao-net
+
+  wendao:
+    build:
+      context: ../../server
+      dockerfile: Dockerfile
+    image: wendao/app:latest
+    container_name: wq-wendao
+    restart: unless-stopped
+    entrypoint: ["wendao-server"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    environment:
+      TZ: "Asia/Shanghai"
+      # ---- HTTP ----
+      WQ_SERVER_PORT: "8080"
+      WQ_JWT_SECRET: "${WQ_JWT_SECRET}"
+      WQ_CORS_ORIGINS: "${WQ_CORS_ORIGINS:-https://panel.wendaoiot.com}"
+      # ---- MySQL（网内服务名直连）----
+      WQ_MYSQL_HOST: "mysql"
+      WQ_MYSQL_PORT: "3306"
+      WQ_MYSQL_USER: "wendao"
+      WQ_MYSQL_PASSWORD: "${MYSQL_APP_PASSWORD}"
+      WQ_MYSQL_DATABASE: "${MYSQL_DATABASE:-wendaoiot}"
+      # ---- 业务 MQTT 客户端（连独立 broker；启动期自带重试）----
+      WQ_MQTT_BROKER: "tcp://broker:1883"
+      WQ_MQTT_CLIENT_ID: "${WQ_MQTT_CLIENT_ID:-wendao_server}"
+      WQ_BROKER_SERVER_USERNAME: "${WQ_BROKER_SERVER_USERNAME:-wendao_server}"
+      WQ_BROKER_SERVER_PASSWORD: "${WQ_BROKER_SERVER_PASSWORD}"
+      # ---- 调 broker 踢线 ----
+      WQ_SYNC_SECRET: "${WQ_SYNC_SECRET}"
+      WQ_SYNC_BROKER_URL: "http://broker:18090"
+      # ---- 首次启动管理员引导（仅首次生效，之后可从 .env 移除）----
+      WQ_ADMIN_USERNAME: "${WQ_ADMIN_USERNAME:-admin}"
+      WQ_ADMIN_PASSWORD: "${WQ_ADMIN_PASSWORD}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - wendao-net
+
+  nginx:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.portal
+    image: wendao/portal:latest
+    container_name: wq-nginx
+    restart: unless-stopped
+    depends_on:
+      - wendao
+    ports:
+      # 默认不占宿主 80（宿主 nginx 通常在用）：门户容器监听 8088，
+      # 再由宿主 nginx 按 server_name 反代；PORTAL_HTTP_PORT 可在 .env 覆盖
+      - "${PORTAL_HTTP_PORT:-8088}:80"
+    volumes:
+      # wiki 静态站：宿主 /opt/wendao/web/portal 只读挂载
+      - ${WIKI_ROOT:-/opt/wendao/web/portal}:/var/www/wiki:ro
+    networks:
+      - wendao-net
+
+volumes:
+  wq-mysql-data:
+  wq-broker-data:
+
+networks:
+  wendao-net:
+    driver: bridge
